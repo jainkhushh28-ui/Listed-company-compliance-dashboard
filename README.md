@@ -1,36 +1,39 @@
 # Listing Compliance Compass
 
-A free Streamlit prototype for planning recurring and event-driven NSE/SEBI listed-company compliance work. It turns the compliance calendar in the supplied brief into a dashboard with filing destinations, timing rules, a rolling schedule and a CSV download.
+A compliance management dashboard for Indian companies: choose your entity type, see every applicable obligation
+under **Companies Act 2013, SEBI LODR, SEBI PIT, SEBI SAST and FEMA** with regulation number, timeline and mode of
+filing, and mark each one Pending / Completed / Not applicable with a completion date.
+
+## Files
+| File | Purpose |
+|---|---|
+| `app.py` | Streamlit interface |
+| `engine.py` | Applicability and due-date logic |
+| `data/regulatory_catalog.csv` | The rulebook (100 requirements). Edit this to update a rule |
+| `data/companies.csv` | Demo companies loaded at start |
+| `data/task_status.csv`, `data/events.csv` | Empty starting files |
+| `requirements.txt` | Python dependencies |
 
 ## Run locally
-
-```bash
-cd /Users/khushjain/Documents/Codex/2026-10-24/files-mentioned-by-the-user-i/outputs/listed-company-compliance-dashboard
-python3 -m venv .venv
-source .venv/bin/activate
+```
 pip install -r requirements.txt
 streamlit run app.py
 ```
+To save changes to the CSV files while running locally: `COMPLIANCE_PERSIST=1 streamlit run app.py`
 
-Streamlit opens the dashboard in your browser. Stop it with `Ctrl+C`.
+## Entity types covered
+Private (small / other), unlisted public, listed Main Board (Top 100/250/500/1000/2000), SME, IGP, debt-only
+(with HVDLE), and equity + debt. FDI, ODI, ECB, subsidiaries, MSME dues, CSR, dividend, cost audit and
+SAST facts switch extra compliances on.
 
-## Free deployment
+## How data is stored (important for the public app)
+On Streamlit Community Cloud every visitor gets a private session; nothing is shared between users and nothing
+survives a refresh. Use **Save / restore my work** in the sidebar to download and re-upload a backup (.json).
+For permanent team use, connect a database or Google Sheet.
 
-1. Create a GitHub repository and upload this project.
-2. Sign in to [Streamlit Community Cloud](https://share.streamlit.io/).
-3. Choose the repository, branch, and `app.py` as the entrypoint.
-4. Deploy. The `requirements.txt` file supplies the needed packages.
+## Updating a rule
+Each row of `regulatory_catalog.csv` has: `entities` (who), `requires` (facts needed, `;` = AND), `min_tier`,
+`deadline_rule` (e.g. `q:30`, `agm:60`, `fixed_md:6-30`, `event_days:30`), regulation, timeline, filing mode and a
+verification flag. Commit the change to GitHub and the live app updates.
 
-## Update the compliance catalogue
-
-Edit `data/compliance_catalog.csv` whenever NSE/SEBI changes a rule, deadline, filing tile or applicability condition. The app intentionally labels company profiles as demos; connect a maintained company master only after you have authoritative coverage data.
-
-## Add companies and applicability facts
-
-Use the **Company register** tab in the app to add a company, choose its listing category, and record the applicability facts that control filtering. It also supports reviewing, editing and deleting company records; deletion requires an explicit confirmation and the final remaining record cannot be deleted. The register is stored in `data/companies.csv` when running locally. Download that CSV before making material changes so it can be reviewed and restored.
-
-The current rule catalogue covers Main Board equity issuers. Do not apply it to Emerge/SME, IGP, debt or other categories until a category-specific catalogue has been independently checked and added. Streamlit Community Cloud does not provide durable file storage for shared production data; use a managed database or a controlled shared source before relying on edits made in the deployed app.
-
-## Important limitation
-
-The dashboard is a planning aid, not legal advice. Several requirements depend on an event, board meeting, annual-report dispatch, financial-results publication, security type or company-specific status. Check the latest official NSE/SEBI material, prescribed forms and portal instructions before filing.
+*Planning tool, not legal advice. Verify against current law before filing.*
