@@ -1,0 +1,5 @@
+company_id,company_name,nse_symbol,listing_category,top_1000,large_entity,promoter_sast,profile_last_reviewed,profile_owner,notes
+demo-main,Demo Main Board Issuer,DEMO,Main Board,False,False,False,2026-10-24,Compliance team,Replace this demonstration record with your company data.
+demo-top-1000,Demo Top 1000 Issuer,DEMO1000,Main Board,False,False,False,2026-10-24,Compliance team,Shows the additional BRSR and large-entity requirements.
+demo-igp,Demo IGP Issuer,DEMOIGP,IGP,False,False,False,2026-10-24,Compliance team,The Main Board catalogue intentionally does not assign requirements to this profile.
+eternal-limited,ETERNAL LIMITED,ETERNAL,Main Board,True,False,False,2026-10-24,,
