@@ -24,10 +24,11 @@ COLUMNS = {"companies": E.COMPANY_COLUMNS, "status": E.STATUS_COLUMNS, "events":
 PERSIST = os.environ.get("COMPLIANCE_PERSIST", "0") == "1"
 
 STATE_COLORS = {
-    "Completed": "#2f5d9b", "Completed late": "#8fb0d8", "Upcoming": "#d7dde6", "Due soon": "#8b95a5",
-    "Overdue": "#1a1f2b", "Date needed": "#eceff3", "Not applicable": "#f3f4f6",
+    "Completed": "#1f4e8c", "Completed late": "#5b8bc9", "Upcoming": "#a9c4e4", "Due soon": "#6b7a90",
+    "Overdue": "#14213d", "Date needed": "#dbe4f0", "Not applicable": "#eef2f7",
 }
-NAVY = "#1f3a5f"
+NAVY = "#1f4e8c"
+PENDING_BLUE = "#a9c4e4"
 MONTHS_FY = [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3]
 
 
@@ -160,6 +161,16 @@ div[data-testid="stMetric"] { background:#fff; border:1px solid #e3e7ee; border-
 div[data-testid="stMetricLabel"] p { color:#5b6675; font-size:.8rem; }
 div[data-testid="stMetricValue"] { font-size:1.6rem; font-weight:600; }
 button[data-baseweb="tab"] { font-size:.95rem; }
+button[data-baseweb="tab"][aria-selected="true"], button[data-baseweb="tab"][aria-selected="true"] p { color:#1f3a5f !important; }
+div[data-baseweb="tab-highlight"] { background-color:#1f3a5f !important; }
+button[data-testid="stBaseButton-segmented_controlActive"] { background:#1f3a5f !important; border-color:#1f3a5f !important; color:#fff !important; }
+button[data-testid="stBaseButton-segmented_controlActive"] p { color:#fff !important; }
+button[data-testid="stBaseButton-primary"] { background:#1f3a5f; border-color:#1f3a5f; color:#fff; }
+button[data-testid="stBaseButton-primary"]:hover { background:#2b4c78; border-color:#2b4c78; }
+span[data-baseweb="tag"] { background:#e6edf6 !important; color:#1f3a5f !important; }
+span[data-baseweb="tag"] span { color:#1f3a5f !important; }
+.bar { height:8px; background:#e6edf6; border-radius:4px; overflow:hidden; margin:.6rem 0 1.2rem; }
+.bar > div { height:100%; background:#1f4e8c; }
 hr { margin: 1.2rem 0; }
 @media (max-width:760px){ .block-container{padding-top:3rem;padding-left:1rem;padding-right:1rem;} .title{font-size:1.4rem;} }
 </style>""", unsafe_allow_html=True)
@@ -250,22 +261,22 @@ with tab_dash:
     k[2].metric("Pending", total - done)
     k[3].metric("Overdue", overdue)
     k[4].metric("Completion", f"{pct}%")
-    st.progress(pct / 100)
+    st.markdown(f'<div class="bar"><div style="width:{pct}%"></div></div>', unsafe_allow_html=True)
     need_date = int((df["state"] == "Date needed").sum())
     if need_date and period == "All year":
         st.caption(f"{need_date} AGM-linked items have no date yet. Enter the AGM date in the Tracker tab.")
     if total == 0:
         st.info(f"No compliances fall due in {period_text}.")
     else:
-        c1, c2 = st.columns([1, 1.5], gap="large")
+        c1, c2 = st.columns(2, gap="large")
         with c1:
             st.markdown(f"### Status – {period_text}")
             counts = pdf[pdf["state"] != "Not applicable"].groupby("state").size().reset_index(name="count")
-            donut = alt.Chart(counts).mark_arc(innerRadius=60, outerRadius=100, stroke="#fff").encode(
+            donut = alt.Chart(counts).mark_arc(innerRadius=70, outerRadius=105, stroke="#fff", strokeWidth=2).encode(
                 theta="count:Q",
                 color=alt.Color("state:N", scale=alt.Scale(domain=list(STATE_COLORS), range=list(STATE_COLORS.values())),
-                                legend=alt.Legend(title=None, orient="bottom", columns=3)),
-                tooltip=["state", "count"]).properties(height=290)
+                                legend=alt.Legend(title=None, orient="bottom", columns=4)),
+                tooltip=["state", "count"]).properties(height=330, padding={"top": 10, "bottom": 10, "left": 10, "right": 10})
             st.altair_chart(style(donut), width="stretch")
         with c2:
             st.markdown(f"### Due by month – {E.fy_label(fy)}")
@@ -276,9 +287,10 @@ with tab_dash:
             bars = alt.Chart(monthly).mark_bar().encode(
                 x=alt.X("month:N", sort=month_labels, title=None, axis=alt.Axis(labelAngle=0)),
                 y=alt.Y("count:Q", title=None),
-                color=alt.Color("state:N", scale=alt.Scale(domain=list(STATE_COLORS), range=list(STATE_COLORS.values())), legend=None),
+                color=alt.Color("state:N", scale=alt.Scale(domain=list(STATE_COLORS), range=list(STATE_COLORS.values())),
+                                legend=alt.Legend(title=None, orient="bottom", columns=4)),
                 opacity=alt.condition(alt.datum.month == sel, alt.value(1), alt.value(1 if not sel else 0.4)),
-                tooltip=["month", "state", "count"]).properties(height=290)
+                tooltip=["month", "state", "count"]).properties(height=330, padding={"top": 10, "bottom": 10, "left": 10, "right": 10})
             st.altair_chart(style(bars), width="stretch")
         c3, c4 = st.columns(2, gap="large")
         with c3:
@@ -287,9 +299,9 @@ with tab_dash:
             law = law.groupby(["law", "Result"]).size().reset_index(name="count")
             chart = alt.Chart(law).mark_bar().encode(
                 y=alt.Y("law:N", sort=E.LAWS, title=None), x=alt.X("count:Q", title=None),
-                color=alt.Color("Result:N", scale=alt.Scale(domain=["Completed", "Pending"], range=[STATE_COLORS["Completed"], "#d7dde6"]),
-                                legend=alt.Legend(title=None, orient="bottom")),
-                tooltip=["law", "Result", "count"]).properties(height=240)
+                color=alt.Color("Result:N", scale=alt.Scale(domain=["Completed", "Pending"], range=[NAVY, PENDING_BLUE]),
+                                legend=alt.Legend(title=None, orient="top", direction="horizontal")),
+                tooltip=["law", "Result", "count"]).properties(height=270, padding={"top": 10, "bottom": 10, "left": 10, "right": 10})
             st.altair_chart(style(chart), width="stretch")
         with c4:
             st.markdown("### Completed, by month of completion")
@@ -300,9 +312,13 @@ with tab_dash:
                 comp["m"] = comp["completed_on"].map(lambda d: d.replace(day=1))
                 comp["month"] = comp["m"].map(lambda d: d.strftime("%b %Y"))
                 cm = comp.groupby(["m", "month"]).size().reset_index(name="count")
-                chart = alt.Chart(cm).mark_bar(color=NAVY).encode(
+                cm["Result"] = "Completed"
+                chart = alt.Chart(cm).mark_bar().encode(
                     x=alt.X("month:N", sort=alt.EncodingSortField("m"), title=None, axis=alt.Axis(labelAngle=0)),
-                    y=alt.Y("count:Q", title=None), tooltip=["month", "count"]).properties(height=240)
+                    y=alt.Y("count:Q", title=None),
+                    color=alt.Color("Result:N", scale=alt.Scale(domain=["Completed", "Pending"], range=[NAVY, PENDING_BLUE]),
+                                    legend=alt.Legend(title=None, orient="top", direction="horizontal")),
+                    tooltip=["month", "count"]).properties(height=270, padding={"top": 10, "bottom": 10, "left": 10, "right": 10})
                 st.altair_chart(style(chart), width="stretch")
         st.markdown(f"### Needs attention – {period_text}")
         attn = active[active["state"].isin(["Overdue", "Due soon"])]
