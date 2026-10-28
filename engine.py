@@ -229,8 +229,19 @@ def event_due(rule_code: str, event_date: date) -> date:
     return event_date  # event_manual
 
 
+def parse_extension(text) -> tuple[int, date, str] | None:
+    """'2026|2026-12-31|reference' -> (fy, extended date, reference)."""
+    parts = str(text or "").split("|")
+    if len(parts) != 3:
+        return None
+    try:
+        return int(parts[0]), date.fromisoformat(parts[1]), parts[2]
+    except ValueError:
+        return None
+
+
 def _base(rule: dict) -> dict:
-    return {
+    return {"remark": "",
         "rule_id": rule["id"], "law": rule["law"], "frequency": rule["frequency"], "nature": rule["nature"],
         "title": rule["title"], "regulation": rule["regulation"], "timeline": rule["timeline"],
         "filing_mode": rule["filing_mode"], "note_rule": rule.get("note", ""),
@@ -254,8 +265,8 @@ def generate_tasks(catalog: pd.DataFrame, profile: dict, fy: int, events: list[d
         from_fy = str(rule.get("from_fy", "")).strip()
         base = _base(rule)
 
-        def add(task_id: str, due: date | None, period: str) -> None:
-            tasks.append({**base, "task_id": f"{rule['id']}|{task_id}", "due_date": due, "period": period})
+        def add(task_id: str, due: date | None, period: str, remark: str = "") -> None:
+            tasks.append({**base, "task_id": f"{rule['id']}|{task_id}", "due_date": due, "period": period, "remark": remark})
 
         if kind in {"q", "qres", "tw"}:
             for pe in _period_ends(fy, (3, 6, 9, 12)):
@@ -291,9 +302,18 @@ def generate_tasks(catalog: pd.DataFrame, profile: dict, fy: int, events: list[d
             if from_fy and fy - 1 < int(from_fy):
                 continue
             n = int(arg)
+            ext = parse_extension(rule.get("extension"))
+            ext = ext if ext and ext[0] == fy else None
             if agm and lo <= agm <= hi:
                 due = add_working_days(agm, n) if kind == "agm_wd" else agm + timedelta(days=n)
-                add(f"AGM-FY{fy}", due, f"AGM held {fmt(agm)}")
+                remark = ""
+                if ext and due < ext[1]:
+                    remark = f"Extended to {fmt(ext[1])} without additional fees ({ext[2]}). Statutory date: {fmt(due)}."
+                    due = ext[1]
+                add(f"AGM-FY{fy}", due, f"AGM held {fmt(agm)}", remark)
+            elif ext:
+                add(f"AGM-FY{fy}", ext[1], "AGM date not set – extended date shown",
+                    f"Extended to {fmt(ext[1])} without additional fees ({ext[2]}).")
             else:
                 add(f"AGM-FY{fy}", None, "AGM date needed")
         # event_* rules are created from the event log below
@@ -330,7 +350,7 @@ STATE_ORDER = ["Overdue", "Due soon", "Upcoming", "Date needed", "Completed", "C
 
 def attach_status(tasks: list[dict], status: pd.DataFrame, company_id: str, as_of: date) -> pd.DataFrame:
     columns = ["task_id", "rule_id", "law", "frequency", "nature", "title", "regulation", "timeline", "filing_mode",
-               "period", "due_date", "verification", "source_url", "note_rule", "is_event", "event_id",
+               "period", "due_date", "verification", "source_url", "note_rule", "remark", "is_event", "event_id",
                "status", "completed_on", "note", "state"]
     if not tasks:
         return pd.DataFrame(columns=columns)
@@ -361,3 +381,18 @@ def attach_status(tasks: list[dict], status: pd.DataFrame, company_id: str, as_o
     df["_sort"] = df["due_date"].map(lambda d: d if d else date(2999, 1, 1))
     df = df.sort_values(["_sort", "law", "title"]).drop(columns="_sort").reset_index(drop=True)
     return df[columns]
+
+
+def update_status(status: pd.DataFrame, company_id: str, task_ids: list[str], new_status: str,
+                  completed_on: date | None, note: str, stamp: str) -> pd.DataFrame:
+    """Set the status of several tasks at once and return the new status table."""
+    records = {(r["company_id"], r["task_id"]): r for r in status.to_dict("records")}
+    for tid in task_ids:
+        old = records.get((company_id, tid), {})
+        records[(company_id, tid)] = {
+            "company_id": company_id, "task_id": tid, "status": new_status,
+            "completion_date": completed_on.isoformat() if (new_status == "Completed" and completed_on) else "",
+            "evidence_note": note.strip() if note and note.strip() else old.get("evidence_note", ""),
+            "updated_at": stamp,
+        }
+    return pd.DataFrame(list(records.values()), columns=STATUS_COLUMNS).astype(str)
