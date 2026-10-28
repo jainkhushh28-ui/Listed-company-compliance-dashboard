@@ -42,8 +42,31 @@ def today() -> date:
 
 # ------------------------------------------------------------------ data layer
 @st.cache_data
+def _read_catalog(mtime: float) -> pd.DataFrame:
+    df = pd.read_csv(CATALOG_PATH, dtype=str).fillna("")
+    if "extension" not in df.columns:
+        df["extension"] = ""
+    return df
+
+
 def load_catalog() -> pd.DataFrame:
-    return pd.read_csv(CATALOG_PATH, dtype=str).fillna("")
+    # keyed on the file's modified time, so an updated CSV is picked up without a manual restart
+    return _read_catalog(CATALOG_PATH.stat().st_mtime)
+
+
+@st.cache_data
+def _read_updates(mtime: float) -> pd.DataFrame:
+    path = DATA / "updates.csv"
+    cols = ["date", "title", "detail", "reference", "law", "affects"]
+    if not path.exists():
+        return pd.DataFrame(columns=cols)
+    df = pd.read_csv(path, dtype=str).fillna("")
+    return df.sort_values("date", ascending=False).reset_index(drop=True)
+
+
+def load_updates() -> pd.DataFrame:
+    path = DATA / "updates.csv"
+    return _read_updates(path.stat().st_mtime if path.exists() else 0.0)
 
 
 def read_table(name: str) -> pd.DataFrame:
@@ -171,6 +194,12 @@ span[data-baseweb="tag"] { background:#e6edf6 !important; color:#1f3a5f !importa
 span[data-baseweb="tag"] span { color:#1f3a5f !important; }
 .bar { height:8px; background:#e6edf6; border-radius:4px; overflow:hidden; margin:.6rem 0 1.2rem; }
 .bar > div { height:100%; background:#1f4e8c; }
+.upd { padding:.55rem 0; border-bottom:1px solid #e3e7ee; }
+.upd:last-child { border-bottom:none; }
+.upd .d { color:#5b6675; font-size:.78rem; }
+.upd .t { font-weight:600; font-size:.95rem; margin:.1rem 0; }
+.upd .x { color:#3a4553; font-size:.88rem; }
+.upd .r { color:#5b6675; font-size:.78rem; margin-top:.15rem; }
 hr { margin: 1.2rem 0; }
 @media (max-width:760px){ .block-container{padding-top:3rem;padding-left:1rem;padding-right:1rem;} .title{font-size:1.4rem;} }
 </style>""", unsafe_allow_html=True)
@@ -262,6 +291,20 @@ with tab_dash:
     k[3].metric("Overdue", overdue)
     k[4].metric("Completion", f"{pct}%")
     st.markdown(f'<div class="bar"><div style="width:{pct}%"></div></div>', unsafe_allow_html=True)
+    updates = load_updates()
+    mine = set(applicable["id"])
+    relevant = updates[updates["affects"].map(lambda v: not v or bool(mine & set(v.split(";"))))]
+    if len(relevant):
+        def upd_html(r) -> str:
+            when = datetime.strptime(r["date"], "%Y-%m-%d").strftime("%d %b %Y")
+            return (f'<div class="upd"><div class="d">{when} · {r["law"]}</div><div class="t">{r["title"]}</div>'
+                    f'<div class="x">{r["detail"]}</div><div class="r">{r["reference"]}</div></div>')
+        with st.container(border=True):
+            st.markdown('<div class="label">Recent changes affecting this entity</div>', unsafe_allow_html=True)
+            st.markdown("".join(upd_html(r) for _, r in relevant.head(3).iterrows()), unsafe_allow_html=True)
+            if len(relevant) > 3:
+                with st.expander("Earlier changes"):
+                    st.markdown("".join(upd_html(r) for _, r in relevant.iloc[3:].iterrows()), unsafe_allow_html=True)
     need_date = int((df["state"] == "Date needed").sum())
     if need_date and period == "All year":
         st.caption(f"{need_date} AGM-linked items have no date yet. Enter the AGM date in the Tracker tab.")
@@ -386,7 +429,7 @@ with tab_track:
         table = pd.DataFrame({
             "Due": v["due_date"].map(E.fmt), "Requirement": v["title"], "Regulation": v["regulation"], "Law": v["law"],
             "Mode of filing": v["filing_mode"], "Type": v["nature"], "Status": v["state"],
-            "Completed on": v["completed_on"].map(E.fmt),
+            "Completed on": v["completed_on"].map(E.fmt), "Remarks": v["remark"],
         })
         event = st.dataframe(
             table, hide_index=True, width="stretch", height=min(540, 36 * (len(table) + 1) + 3),
@@ -394,7 +437,8 @@ with tab_track:
             column_config={"Due": st.column_config.TextColumn(width="small"), "Requirement": st.column_config.TextColumn(width="large"),
                            "Regulation": st.column_config.TextColumn(width="medium"), "Law": st.column_config.TextColumn(width="small"),
                            "Mode of filing": st.column_config.TextColumn(width="large"), "Type": st.column_config.TextColumn(width="small"),
-                           "Status": st.column_config.TextColumn(width="small"), "Completed on": st.column_config.TextColumn(width="small")})
+                           "Status": st.column_config.TextColumn(width="small"), "Completed on": st.column_config.TextColumn(width="small"),
+                           "Remarks": st.column_config.TextColumn(width="large")})
         rows = list(event.selection.rows)
         chosen = v.loc[rows, "task_id"].tolist() if rows else []
         st.markdown(f'<div class="label">Update status{" – " + str(len(chosen)) + " selected" if chosen else ""}</div>', unsafe_allow_html=True)
