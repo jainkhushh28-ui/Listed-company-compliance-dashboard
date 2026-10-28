@@ -11,7 +11,6 @@ filing, and mark each one Pending / Completed / Not applicable with a completion
 | `engine.py` | Applicability and due-date logic |
 | `data/regulatory_catalog.csv` | The rulebook (100 requirements). Edit this to update a rule |
 | `data/companies.csv` | Demo companies loaded at start |
-| `data/updates.csv` | Dated changes shown in the Overview. Add a row when a rule changes (`affects` = catalogue ids, blank = everyone) |
 | `data/task_status.csv`, `data/events.csv` | Empty starting files |
 | `requirements.txt` | Python dependencies |
 
